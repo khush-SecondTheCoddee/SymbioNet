@@ -1,0 +1,137 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: tasks
+    // Document ID: {taskId}
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required, 1-100 chars)
+    //   - description: string (required, 1-1000 chars)
+    //   - shadowSkill: string (required, 1-50 chars)
+    //   - estimatedTime: string (required, 1-20 chars)
+    //   - intensity: string (required, enum: ["Low", "Medium", "High"])
+    //   - priority: number (required, 1-5)
+    //   - status: string (required, enum: ["available", "in-progress", "completed"])
+    //   - authorUid: string (required, immutable)
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required, must match userId)
+    //   - points: number (required, >= 0)
+    //   - badges: list (required, max 100 items)
+    //   - completedTasks: number (required, >= 0)
+    //   - skills: list (required, max 50 items)
+    //   - displayName: string (optional, 1-50 chars)
+    //   - vibeStatus: string (optional, enum: ["Healthy", "Stressed", "At Risk"])
+    //   - vibeMessage: string (optional, 1-500 chars)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.authorUid;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isRecent() {
+      return request.time >= resource.data.createdAt;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidTask(data) {
+      return hasRequiredFields(['id', 'title', 'description', 'shadowSkill', 'estimatedTime', 'intensity', 'priority', 'status', 'authorUid', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 100 &&
+             data.description is string && data.description.size() > 0 && data.description.size() <= 1000 &&
+             data.shadowSkill is string && data.shadowSkill.size() > 0 && data.shadowSkill.size() <= 50 &&
+             data.intensity in ["Low", "Medium", "High"] &&
+             data.priority is int && data.priority >= 1 && data.priority <= 5 &&
+             data.status in ["available", "in-progress", "completed"] &&
+             data.authorUid is string &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'points', 'badges', 'completedTasks', 'skills']) &&
+             data.uid == request.auth.uid &&
+             data.points is int && data.points >= 0 &&
+             data.badges is list && data.badges.size() <= 100 &&
+             data.completedTasks is int && data.completedTasks >= 0 &&
+             data.skills is list && data.skills.size() <= 50;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /tasks/{taskId} {
+      // Anyone authenticated can read tasks
+      allow read: if isAuthenticated();
+      
+      // NGOs (authenticated users) can create tasks
+      allow create: if isAuthenticated() && 
+                      isValidTask(request.resource.data) && 
+                      request.resource.data.authorUid == request.auth.uid;
+      
+      // Owners can update their tasks, or volunteers can update status
+      allow update: if isAuthenticated() && 
+                      isValidTask(request.resource.data) && 
+                      (
+                        // Owner update
+                        (isDocOwner() && 
+                         request.resource.data.authorUid == resource.data.authorUid &&
+                         request.resource.data.createdAt == resource.data.createdAt) ||
+                        // Volunteer status update (only status can change)
+                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+                         resource.data.status != 'completed')
+                      );
+      
+      allow delete: if isDocOwner();
+    }
+
+    match /users/{userId} {
+      // Users can only read their own profile (PII protection)
+      allow read: if isOwner(userId);
+      
+      // Public leaderboard (only if we split collections, but for now we'll allow reading specific fields if needed)
+      // For this demo, we'll allow reading points/badges for leaderboard if we had a public collection.
+      // Since we don't, we'll keep it strict.
+      
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      
+      allow update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+    
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

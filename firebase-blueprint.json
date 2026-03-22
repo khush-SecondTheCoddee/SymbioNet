@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "Task": {
+      "title": "Task",
+      "description": "A micro-task shattered from an NGO project.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "shadowSkill": { "type": "string" },
+        "estimatedTime": { "type": "string" },
+        "intensity": { "type": "string", "enum": ["Low", "Medium", "High"] },
+        "priority": { "type": "integer" },
+        "status": { "type": "string", "enum": ["available", "in-progress", "completed"] },
+        "authorUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "description", "shadowSkill", "estimatedTime", "intensity", "priority", "status", "authorUid", "createdAt"]
+    },
+    "VolunteerProfile": {
+      "title": "Volunteer Profile",
+      "description": "Gamification and skill data for a volunteer.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "points": { "type": "integer" },
+        "badges": { "type": "array", "items": { "type": "string" } },
+        "completedTasks": { "type": "integer" },
+        "skills": { "type": "array", "items": { "type": "string" } },
+        "displayName": { "type": "string" },
+        "vibeStatus": { "type": "string", "enum": ["Healthy", "Stressed", "At Risk"] },
+        "vibeMessage": { "type": "string" }
+      },
+      "required": ["uid", "points", "badges", "completedTasks", "skills"]
+    }
+  },
+  "firestore": {
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Collection of micro-tasks."
+    },
+    "/users/{userId}": {
+      "schema": "VolunteerProfile",
+      "description": "User profiles for volunteers and NGOs."
+    }
+  }
+}
