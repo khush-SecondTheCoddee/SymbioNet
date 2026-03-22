@@ -1,0 +1,5 @@
+{
+  "name": "SymbioNet",
+  "description": "A resource-optimizer for the Solution Challenge 2026. Shatters NGO projects into 15-minute tasks based on Shadow Skills and Vibe/Stress Level.",
+  "requestFramePermissions": ["microphone"]
+}
